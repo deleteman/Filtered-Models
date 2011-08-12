@@ -1,0 +1,46 @@
+== Filtered Models Plugin ==
+
+- Introduction
+- Installation 
+- Use example
+- Contact
+
+
+Introduction
+-------------------------
+
+Rails 3 plugin which adds extra functionalities to the AtiveRecord class, allowing the developer
+to use filter like methods that behave like the action filters for the Controllers.
+
+
+Installation
+-------------------------
+In order to install this plugin, it should be enough to just copy the entire folder under vendor/plugins.
+
+
+
+Use example
+-------------------------
+
+class Test < ActiveRecord::base
+	before_filter :filter_method => [:filtered_method]
+	after_filter :last_method => []
+
+	def filter_method 
+		# your filter code here
+	end
+
+	#Filtered methods must start with "__"
+	def __filtered_method
+		#  your code here
+	end
+
+	def last_method
+		#this code will execute always after a method is invoked
+	end
+end
+
+
+Contact
+-------------------------
+Please send your comments and suggestions to deleteman@gmail.com

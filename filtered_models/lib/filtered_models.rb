@@ -1,4 +1,7 @@
-# FilteredModels
+=begin
+# FilteredModels v0.5
+# Author: Fernando Doglio
+=end
 class ::ActiveRecord::Base
 
 	private 
@@ -27,6 +30,7 @@ class ::ActiveRecord::Base
 	end
 
 
+	#Here is where the magic happens
 	def method_missing(current_method, *args)
 		begin
 			super 
