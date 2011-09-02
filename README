@@ -23,15 +23,14 @@ Use example
 -------------------------
 
 class Test < ActiveRecord::base
-	before_filter :filter_method => [:filtered_method]
-	after_filter :last_method => []
+	before_filter :filter_method, :only => [:filtered_method]
+	after_filter :last_method, :only => [:filtered_method]
 
 	def filter_method 
 		# your filter code here
 	end
 
-	#Filtered methods must start with "__"
-	def __filtered_method
+	def filtered_method
 		#  your code here
 	end
 
