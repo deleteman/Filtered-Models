@@ -11,21 +11,7 @@ class ::ActiveRecord::Base
 
 
 	private 
-	def execute_methods options, current_method
-		options.each do |event, methods|
-			if !methods.empty? then
-				methods.each do |filtered_method|
-					if filtered_method == current_method then
-						self.send event
-					end
-				end
-			else 
-				self.send event
-			end
-
-		end
-	end
-
+	
 	# Chains a list of method names for a specific one
 	# 
 	# type = :before, :after
@@ -147,13 +133,4 @@ class ::ActiveRecord::Base
 	end
 
 
-	#def method_missing(current_method, *args)
-		#begin
-			#super 
-		#rescue
-			#execute_methods @@before_filter_options, current_method
-			#self.send "__#{current_method}".to_sym, *args
-			#execute_methods @@after_filter_options, current_method
-		#end
-	#end
 end
