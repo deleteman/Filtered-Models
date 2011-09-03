@@ -3,6 +3,7 @@
 - Introduction
 - Installation 
 - Use example
+- TODO's
 - Contact
 
 
@@ -10,7 +11,23 @@ Introduction
 -------------------------
 
 Rails 3 plugin which adds extra functionalities to the AtiveRecord class, allowing the developer
-to use filter like methods that behave like the action filters for the Controllers.
+to use filter methods that behave like the action filters for the Controllers.
+
+Implemented filter:
+
+- after_filter, before_filter
+
+They both support the following forms:
+
+before_filter :method
+before_filter :method, :only => [:method1, :method2]
+before_filter :method, :only => [:method1, :method2] do |m| 
+	#code here (m is the model)
+end
+before_filter :only => [:method1, :method2] do |m| 
+	#code here (m is the model)
+end
+
 
 
 Installation
@@ -25,7 +42,11 @@ Use example
 class Test < ActiveRecord::base
 	before_filter :filter_method, :only => [:filtered_method]
 	after_filter :last_method, :only => [:filtered_method]
+	after_filter :always
 
+	def always
+		#this method will be called after every single method defined here, except itself
+	end
 	def filter_method 
 		# your filter code here
 	end
@@ -38,6 +59,13 @@ class Test < ActiveRecord::base
 		#this code will execute always after a method is invoked
 	end
 end
+
+
+TODO's
+-------------------------
+
+- Implement the ":except" clause
+- Hard testing
 
 
 Contact

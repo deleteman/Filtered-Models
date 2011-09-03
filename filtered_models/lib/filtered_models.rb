@@ -6,8 +6,9 @@ class ::ActiveRecord::Base
 
 
 	@@filters = Hash.new
-	@@always_filters = Hash.new 
+	@@always_filters = {:before => Array.new, :after => Array.new}
 	@@except_filters = Hash.new
+	@@m_names = nil;
 
 
 	private 
@@ -20,7 +21,7 @@ class ::ActiveRecord::Base
 	# i.e: chain_methods_for [:method1, :method2], :filtered_method, :before, :only
 	# i.e2: chain_methods_for [:method3], :filtered_method, :before, :except
 	# 
-	def self.chain_methods_for(methods, for_method, type, _when)
+	def self.chain_methods_for(methods, for_method, type, _when, &block)
 		if(_when == :except)
 			@@except_filters[type] = Hash.new if @@except_filters[type].nil?
 			@@except_filters[type][for_method] = methods
@@ -28,69 +29,66 @@ class ::ActiveRecord::Base
 
 		if(_when == :only)
 			@@filters[for_method] = Hash.new if @@filters[for_method].nil?
-			@@filters[for_method][type] = methods;
+			@@filters[for_method][type] = Hash.new if @@filters[for_method][type].nil?
+			@@filters[for_method][type][:methods] = methods
+			@@filters[for_method][type][:block] = block
 		end
 
 		if(_when == :always)
-			@@always_filters[type] = Array.new if @@always_filters[type].nil?
-			@@always_filters[type].concat(methods)
+			@@always_filters[type].concat(methods).uniq
 		end
 	end
 
 	def load_filters(args = nil)
-		class << self
-			#method_names = self.instance_methods(false).select do |m|
-				#!@@filters.key? m && respond_to?(m.to_sym)
-			#end
-		
-				# Modify all methods that are not explicitly filtered, so they can be filtered 
-				# when a filters has no "_when" 
-					#puts "*********** methods listing....*************"
-			#method_names.each do |m_name|
-					#puts m_name
-					#puts "Defining method: #{m_name}"
-					#define_method "#{m_name}".to_sym do |*p|
-						#@@always_filters[:before].each do |m| self.send m end if !@@always_filters[:before].nil?
-						#super
-						#@@always_filters[:after].each do |m| self.send m end if !@@always_filters[:after].nil?
-					#end
-					#define_method "#{m_name}_with_filter".to_sym do |*p|
-						#if(_when == :before)
-							#@@always_filters[:before].each do |m| self.send m end
-						#end 
-						#self.send "#{m_name}_without_filter".to_sym, *p
-						#if(_when == :after)
-							#@@always_filters[:after].each do |m| self.send m end
-						#end 
 
-					#end
-						#if respond_to? m_name
-							#alias_method_chain m_name, :filter 
-						#end
-			#end
+			#puts "CLASS: #{s}
+			if(@@m_names.nil?)
+				@@m_names= self.class.instance_methods(false).select do |m|
+					@@always_filters[:before].index(m).nil? and @@always_filters[:after].index(m).nil?
+				end
+			end 
+			m_names = @@m_names
+			#puts "********** Metodos: #{m_names} **************"
+		
+			# Modify all methods that are not explicitly filtered, so they can be filtered 
+			# when a filters has no "_when" 
+			m_names.each do |m_name|
+				if !self.respond_to?("#{m_name}_with_filter".to_sym)
+					self.class.send :define_method, "#{m_name}_with_filter".to_sym do |*p|
+						@@always_filters[:before].each do |m| self.send m end if !@@always_filters[:before].nil?
+						self.send "#{m_name}_without_filter".to_sym, *p
+						@@always_filters[:after].each do |m| self.send m end if !@@always_filters[:after].nil?
+					end
+					self.class.alias_method_chain m_name, :filter
+				end
+			end
 
 		@@filters.each { |method, type|
-			
-			type.each { |_when, arr_methods|
-				define_method "#{method}_with_filter".to_sym do |*p|
-					if(_when == :before)
-						arr_methods.each do |m| self.send m end
-					end 
-					self.send "#{method}_without_filter".to_sym, *p
-					if(_when == :after)
-						arr_methods.each do |m| self.send m end
-					end 
+			type.each { |_when, data|
+				arr_methods = data[:methods]
+	
+				if !self.respond_to? "#{method}_with_#{_when}_filter".to_sym
+					self.class.send :define_method, "#{method}_with_#{_when}_filter".to_sym do |*p|
+						if(_when == :before)
+							arr_methods.each do |m| self.send m end
+							data[:block].call(self) if !data[:block].nil?
+						end 
+						self.send "#{method}_without_#{_when}_filter".to_sym, *p
+						if(_when == :after)
+							arr_methods.each do |m| self.send m end
+							data[:block].call(self) if !data[:block].nil?
+						end 
 
+					end
+					self.class.alias_method_chain method, "#{_when}_filter".to_sym
 				end
-				alias_method_chain method, :filter 
 			}
 		}
-		end
 	end
 
 
 	public
-	def self.before_filter *options 
+	def self.before_filter *options , &block
 			before_chain = Array.new
 			has_cond = false
 			options.each { |opt|
@@ -99,25 +97,25 @@ class ::ActiveRecord::Base
 					has_cond = true
 					opt.each { |_when, methods|
 						methods.each { |on_method|
-							chain_methods_for(before_chain, on_method, :before, _when)
+							chain_methods_for(before_chain, on_method, :before, _when, &block)
 						}	
 					}
 				end
 			}
 
-		#if !has_cond
-			#chain_methods_for(before_chain, nil, :before, :always)
-		#end
+		if !has_cond
+			chain_methods_for(before_chain, nil, :before, :always)
+		end
 
 	end
 
 	def self.after_filter *options 
 			chain = Array.new
-			#has_cond = false
+			has_cond = false
 			options.each { |opt|
 				chain.push(opt) if !opt.is_a? Hash
 				if(opt.is_a? Hash)
-					#has_cond = true
+					has_cond = true
 					opt.each { |_when, methods|
 						methods.each { |on_method|
 							chain_methods_for(chain, on_method, :after, _when)
@@ -126,11 +124,9 @@ class ::ActiveRecord::Base
 				end
 			}
 
-		#if !has_cond
-			#chain_methods_for(before_chain, nil, :before, :always)
-		#end
-
+		if !has_cond
+			chain_methods_for(chain, nil, :after, :always)
+		end
 	end
-
 
 end
