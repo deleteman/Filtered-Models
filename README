@@ -21,6 +21,7 @@ They both support the following forms:
 
 before_filter :method
 before_filter :method, :only => [:method1, :method2]
+before_filter :method, :except => [:method1, :method2]
 before_filter :method, :only => [:method1, :method2] do |m| 
 	#code here (m is the model)
 end
@@ -64,7 +65,6 @@ end
 TODO's
 -------------------------
 
-- Implement the ":except" clause
 - Hard testing
 
 

@@ -54,12 +54,25 @@ class ::ActiveRecord::Base
 			# when a filters has no "_when" 
 			m_names.each do |m_name|
 				if !self.respond_to?("#{m_name}_with_filter".to_sym)
-					self.class.send :define_method, "#{m_name}_with_filter".to_sym do |*p|
-						@@always_filters[:before].each do |m| self.send m end if !@@always_filters[:before].nil?
-						self.send "#{m_name}_without_filter".to_sym, *p
-						@@always_filters[:after].each do |m| self.send m end if !@@always_filters[:after].nil?
-					end
-					self.class.alias_method_chain m_name, :filter
+					#if !@@except_filters[:before].key? m_name.to_sym and !@@except_filters[:after].key? m_name.to_sym
+						self.class.send :define_method, "#{m_name}_with_filter".to_sym do |*p|
+							@@always_filters[:before].each do |m| self.send m end if !@@always_filters[:before].nil?
+							@@except_filters[:before].each do |k,methods| 
+								methods.each do |m| 
+									self.send m if  m_name != m
+								end
+							end if !@@except_filters[:before].nil? and !@@except_filters[:before].key? m_name.to_sym 
+
+							self.send "#{m_name}_without_filter".to_sym, *p
+							@@always_filters[:after].each do |m| self.send m end if !@@always_filters[:after].nil?
+							@@except_filters[:after].each do |k,methods| 
+								methods.each do |m| 
+									self.send m if m_name != m
+								end
+							end if !@@except_filters[:after].nil? and !@@except_filters[:after].key? m_name.to_sym 
+						end
+						self.class.alias_method_chain m_name, :filter
+					#end
 				end
 			end
 
