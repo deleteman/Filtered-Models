@@ -17,11 +17,6 @@ class ::ActiveRecord::Base
 
 
 	@@data = {}
-	#@@filters = Hash.new
-	#@@always_filters = {:before => Array.new, :after => Array.new}
-	#@@except_filters = Hash.new
-	#@@m_names = nil;
-
 
 	private 
 	
@@ -34,7 +29,6 @@ class ::ActiveRecord::Base
 	# i.e2: chain_methods_for [:method3], :filtered_method, :before, :except
 	# 
 	def self.chain_methods_for(methods, for_method, type, _when, &block)
-		puts "chaining method"
 		@@data[self.name] = FilterData.new if @@data[self.name].nil?
 		if(_when == :except)
 			@@data[self.name].except_filters[type] = Hash.new if @@data[self.name].except_filters[type].nil?
@@ -53,25 +47,41 @@ class ::ActiveRecord::Base
 		end
 	end
 
+	def get_filtered_method_name mname
+		mname = mname.to_s
+		if(!mname.index("=").nil?)
+			"#{mname.sub("=", "")}_with_filter="
+		else
+			mname + "_with_filter"	
+		end
+	end
+
+	def get_unfiltered_method_name mname
+		mname = mname.to_s
+		if(!mname.index("=").nil?)
+			"#{mname.sub("=", "")}_without_filter="
+		else
+			mname + "_without_filter"	
+		end
+	end
+
+
+
 	def load_filters(args = nil)
 
-			#puts "loading filters...#{@@data} for class: #{self.name}"
 			@@data[self.class.name] = FilterData.new if @@data[self.class.name].nil?
-			#puts "CLASS: #{s}
 			if(@@data[self.class.name].m_names.nil?)
 				@@data[self.class.name].m_names= self.class.instance_methods(false).select do |m|
 					@@data[self.class.name].always_filters[:before].index(m).nil? and @@data[self.class.name].always_filters[:after].index(m).nil?
 				end
 			end 
 			m_names = @@data[self.class.name].m_names
-			#puts "********** Metodos: #{m_names} **************"
 		
 			# Modify all methods that are not explicitly filtered, so they can be filtered 
 			# when a filters has no "_when" 
 			m_names.each do |m_name|
 				if !self.respond_to?("#{m_name}_with_filter".to_sym)
-					#if !@@except_filters[:before].key? m_name.to_sym and !@@except_filters[:after].key? m_name.to_sym
-						self.class.send :define_method, "#{m_name}_with_filter".to_sym do |*p|
+						self.class.send :define_method, get_filtered_method_name(m_name).to_sym do |*p|
 							@@data[self.class.name].always_filters[:before].each do |m| self.send m end if !@@data[self.class.name].always_filters[:before].nil?
 							@@data[self.class.name].except_filters[:before].each do |k,methods| 
 								methods.each do |m| 
@@ -79,16 +89,20 @@ class ::ActiveRecord::Base
 								end
 							end if !@@data[self.class.name].except_filters[:before].nil? and !@@data[self.class.name].except_filters[:before].key? m_name.to_sym 
 
-							self.send "#{m_name}_without_filter".to_sym, *p
+							original_return = self.send get_unfiltered_method_name(m_name).to_sym, *p
 							@@data[self.class.name].always_filters[:after].each do |m| self.send m end if !@@data[self.class.name].always_filters[:after].nil?
-							@@data[self.class.name].except_filters[:after].each do |k,methods| 
-								methods.each do |m| 
-									self.send m if m_name != m
-								end
-							end if !@@data[self.class.name].except_filters[:after].nil? and !@@data[self.class.name].except_filters[:after].key? m_name.to_sym 
+							
+							if !@@data[self.class.name].except_filters[:after].nil? and !@@data[self.class.name].except_filters[:after].key? m_name.to_sym
+								@@data[self.class.name].except_filters[:after].each do |k,methods| 
+									methods.each do |m| 
+										self.send m if m_name != m
+									end
+								end  
+							else 
+								original_return
+							end
 						end
 						self.class.alias_method_chain m_name, :filter
-					#end
 				end
 			end
 
