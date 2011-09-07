@@ -1,22 +1,39 @@
-class FilterData
-	attr_accessor :filters, :always_filters, :except_filters, :m_names
 
-	def initialize
-		@filters = Hash.new
-		@always_filters = {:before => Array.new, :after => Array.new}
-		@except_filters = Hash.new
-		@m_names = nil;
+=begin
+Module with all methods for the Filtered Models plugin.
+
+- FilteredModels::FilterDataMod -> Contains the definition for the "data" class attribute and the "FilterData" class, which contains all information for each filter.
+- FilteredModels::ClassLevelFilteredMethod -> Contains all class level methods to be added to the ActiveRecord class
+- FilteredModels::InstanceLevelFilterMethods -> Contains all instance level methods to be added to the ActiveRecord class
+=end
+module FilterModels
+
+module FilterDataMod
+	@@data = {}
+	class FilterData
+		attr_accessor :filters, :always_filters, :except_filters, :m_names
+
+		def initialize
+			@filters = Hash.new
+			@always_filters = {:before => Array.new, :after => Array.new}
+			@except_filters = Hash.new
+			@m_names = nil;
+		end
+
+
 	end
 
-
 end
-# FilteredModels
-class ::ActiveRecord::Base
 
-	after_initialize :load_filters
+module ClassLevelFilteredMethod
 
 
-	@@data = {}
+	include FilterDataMod
+
+	#Redefine the extended callback, to include the instance level methods after this module has been extended
+	def self.extended(base)
+		base.send :include, InstanceLevelFilterMethods
+	end
 
 	private 
 	
@@ -28,7 +45,7 @@ class ::ActiveRecord::Base
 	# i.e: chain_methods_for [:method1, :method2], :filtered_method, :before, :only
 	# i.e2: chain_methods_for [:method3], :filtered_method, :before, :except
 	# 
-	def self.chain_methods_for(methods, for_method, type, _when, &block)
+	def chain_methods_for(methods, for_method, type, _when, &block)
 		@@data[self.name] = FilterData.new if @@data[self.name].nil?
 		if(_when == :except)
 			@@data[self.name].except_filters[type] = Hash.new if @@data[self.name].except_filters[type].nil?
@@ -47,6 +64,58 @@ class ::ActiveRecord::Base
 		end
 	end
 
+	
+
+	public
+	def before_filter *options , &block
+			before_chain = Array.new
+			has_cond = false
+			options.each { |opt|
+				before_chain.push(opt) if !opt.is_a? Hash
+				if(opt.is_a? Hash)
+					has_cond = true
+					opt.each { |_when, methods|
+						methods.each { |on_method|
+							chain_methods_for(before_chain, on_method, :before, _when, &block)
+						}	
+					}
+				end
+			}
+
+		if !has_cond
+			chain_methods_for(before_chain, nil, :before, :always)
+		end
+
+	end
+
+	def after_filter *options 
+			chain = Array.new
+			has_cond = false
+			options.each { |opt|
+				chain.push(opt) if !opt.is_a? Hash
+				if(opt.is_a? Hash)
+					has_cond = true
+					opt.each { |_when, methods|
+						methods.each { |on_method|
+							chain_methods_for(chain, on_method, :after, _when)
+						}	
+					}
+				end
+			}
+
+		if !has_cond
+			chain_methods_for(chain, nil, :after, :always)
+		end
+	end
+
+end
+
+
+module InstanceLevelFilterMethods
+	include FilterDataMod
+
+	private
+
 	def get_filtered_method_name mname
 		mname = mname.to_s
 		if(!mname.index("=").nil?)
@@ -55,6 +124,8 @@ class ::ActiveRecord::Base
 			mname + "_with_filter"	
 		end
 	end
+
+
 
 	def get_unfiltered_method_name mname
 		mname = mname.to_s
@@ -67,6 +138,7 @@ class ::ActiveRecord::Base
 
 
 
+	#Creates all methods needed for the filters to take place. This method is called on the "after_initialize" event, triggered by the AR class.
 	def load_filters(args = nil)
 
 			@@data[self.class.name] = FilterData.new if @@data[self.class.name].nil?
@@ -129,47 +201,6 @@ class ::ActiveRecord::Base
 		}
 	end
 
-
-	public
-	def self.before_filter *options , &block
-			before_chain = Array.new
-			has_cond = false
-			options.each { |opt|
-				before_chain.push(opt) if !opt.is_a? Hash
-				if(opt.is_a? Hash)
-					has_cond = true
-					opt.each { |_when, methods|
-						methods.each { |on_method|
-							chain_methods_for(before_chain, on_method, :before, _when, &block)
-						}	
-					}
-				end
-			}
-
-		if !has_cond
-			chain_methods_for(before_chain, nil, :before, :always)
-		end
-
-	end
-
-	def self.after_filter *options 
-			chain = Array.new
-			has_cond = false
-			options.each { |opt|
-				chain.push(opt) if !opt.is_a? Hash
-				if(opt.is_a? Hash)
-					has_cond = true
-					opt.each { |_when, methods|
-						methods.each { |on_method|
-							chain_methods_for(chain, on_method, :after, _when)
-						}	
-					}
-				end
-			}
-
-		if !has_cond
-			chain_methods_for(chain, nil, :after, :always)
-		end
-	end
+end
 
 end
