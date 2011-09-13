@@ -33,7 +33,13 @@ end
 
 Installation
 -------------------------
+
+Rails 3.X:
 In order to install this plugin, it should be enough to just copy the entire folder under vendor/plugins.
+
+Rails 2.3.X:
+In order to make the plugin work on this version of rails, the follwing file needs to be edited: config/environment.rb 
+Uncomment or add the following line inside the initializer method call: config.plugins = [:filtered_models]
 
 
 
