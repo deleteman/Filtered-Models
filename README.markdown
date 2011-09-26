@@ -30,7 +30,7 @@ When :only or :except are used, if only one method needs to be filtered, then th
 
 ## Filters configuration 
 
-By default, filters that apply to all methods will *ignore* automatically generated attribute accessors (those generated with _attr_reader_, _attr_writer_ or _attr_accessor). You can disable this and allow these type of filters to execute when an accessor is called.
+By default, filters that apply to all methods will *ignore* automatically generated attribute accessors (those generated with _attr_reader_, _attr_writer_ or _attr_accessor_). You can disable this and allow these type of filters to execute when an accessor is called.
 To do this, the following methods are provided:
 
 * configure_before_filters / configure_after_filters: They both take an array of arguments, with different configuration options.
