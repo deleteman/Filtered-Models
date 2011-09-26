@@ -15,7 +15,14 @@ module FilterDataMod
 
 		def initialize
 			@filters = Hash.new
-			@always_filters = {:before => Array.new, :after => Array.new}
+			@always_filters = {:before => {
+									:conf => Array.new, 
+									:methods => Array.new
+								}, 
+								:after => {
+									:conf => Array.new, 
+									:methods => Array.new
+								}}
 			@except_filters = Hash.new
 			@m_names = nil;
 		end
@@ -29,6 +36,7 @@ module ClassLevelFilteredMethod
 
 
 	include FilterDataMod
+	@@config_params = [:include_accessors]
 
 	#Redefine the extended callback, to include the instance level methods after this module has been extended
 	def self.extended(base)
@@ -60,18 +68,31 @@ module ClassLevelFilteredMethod
 		end
 
 		if(_when == :always)
-			@@data[self.name].always_filters[type].concat(methods).uniq
+			@@data[self.name].always_filters[type][:methods].concat(methods).uniq
 		end
 	end
 
 	
+	def is_config_parameter? param
+		@@config_params.include? param
+	end
+
+	def configure_filter_parameter(_when, _opts)
+		invalid_options = _opts.select { |opt|
+			!is_config_parameter? opt
+		}
+		raise Exception.new("Invalid configuration option(s): #{invalid_options.join(", ")}") if invalid_options.count > 0
+		@@data[self.name] = FilterData.new if @@data[self.name].nil?
+		@@data[self.name].always_filters[_when][:conf] += _opts
+	end
 
 	public
 	def before_filter *options , &block
 			before_chain = Array.new
 			has_cond = false
 			options.each { |opt|
-				before_chain.push(opt) if !opt.is_a? Hash
+
+				before_chain.push(opt) if !opt.is_a?(Hash)
 				if(opt.is_a? Hash)
 					has_cond = true
 					opt.each { |_when, methods|
@@ -83,21 +104,25 @@ module ClassLevelFilteredMethod
 			}
 
 		if !has_cond
-			chain_methods_for(before_chain, nil, :before, :always)
+			chain_methods_for(before_chain, nil, :before, :always )
 		end
 
 	end
 
-	def after_filter *options 
+	def after_filter *options , &block
 			chain = Array.new
 			has_cond = false
 			options.each { |opt|
-				chain.push(opt) if !opt.is_a? Hash
+
+				chain.push(opt) if !opt.is_a?(Hash) 
 				if(opt.is_a? Hash)
 					has_cond = true
 					opt.each { |_when, methods|
+						if(!methods.is_a?(Array))	
+							methods = [methods]
+						end
 						methods.each { |on_method|
-							chain_methods_for(chain, on_method, :after, _when)
+							chain_methods_for(chain, on_method, :after, _when, &block)
 						}	
 					}
 				end
@@ -107,6 +132,15 @@ module ClassLevelFilteredMethod
 			chain_methods_for(chain, nil, :after, :always)
 		end
 	end
+
+	def configure_before_filters *options
+		configure_filter_parameter(:before, options)	
+	end
+
+	def configure_after_filters *options
+		configure_filter_parameter(:after, options)	
+	end
+
 
 end
 
@@ -136,6 +170,11 @@ module InstanceLevelFilterMethods
 		end
 	end
 
+	def include_accessors? _when
+		#puts "*****conf: #{@@data[self.class.name].always_filters[_when][:conf].inspect}"
+		@@data[self.class.name].always_filters[_when][:conf].include? :include_accessors
+	end
+
 
 
 	#Creates all methods needed for the filters to take place. This method is called on the "after_initialize" event, triggered by the AR class.
@@ -144,7 +183,7 @@ module InstanceLevelFilterMethods
 			@@data[self.class.name] = FilterData.new if @@data[self.class.name].nil?
 			if(@@data[self.class.name].m_names.nil?)
 				@@data[self.class.name].m_names= self.class.instance_methods(false).select do |m|
-					@@data[self.class.name].always_filters[:before].index(m).nil? and @@data[self.class.name].always_filters[:after].index(m).nil?
+					@@data[self.class.name].always_filters[:before][:methods].index(m).nil? and @@data[self.class.name].always_filters[:after][:methods].index(m).nil?
 				end
 			end 
 			m_names = @@data[self.class.name].m_names
@@ -154,7 +193,13 @@ module InstanceLevelFilterMethods
 			m_names.each do |m_name|
 				if !self.respond_to?("#{m_name}_with_filter".to_sym)
 						self.class.send :define_method, get_filtered_method_name(m_name).to_sym do |*p|
-							@@data[self.class.name].always_filters[:before].each do |m| self.send m end if !@@data[self.class.name].always_filters[:before].nil?
+
+							@@data[self.class.name].always_filters[:before][:methods].each do |m| 
+								if( (is_accessor_method?(m_name) and include_accessors?(:before)) || !is_accessor_method?(m_name))
+									self.send m 
+								end
+							end if !@@data[self.class.name].always_filters[:before][:methods].nil?
+
 							@@data[self.class.name].except_filters[:before].each do |k,methods| 
 								methods.each do |m| 
 									self.send m if  m_name != m
@@ -162,7 +207,11 @@ module InstanceLevelFilterMethods
 							end if !@@data[self.class.name].except_filters[:before].nil? and !@@data[self.class.name].except_filters[:before].key? m_name.to_sym 
 
 							original_return = self.send get_unfiltered_method_name(m_name).to_sym, *p
-							@@data[self.class.name].always_filters[:after].each do |m| self.send m end if !@@data[self.class.name].always_filters[:after].nil?
+							@@data[self.class.name].always_filters[:after][:methods].each do |m| 
+								if( (is_accessor_method?(m_name) and include_accessors?(:after)) || !is_accessor_method?(m_name))
+									self.send m 
+								end
+							end if !@@data[self.class.name].always_filters[:after][:methods].nil?
 							
 							if !@@data[self.class.name].except_filters[:after].nil? and !@@data[self.class.name].except_filters[:after].key? m_name.to_sym
 								@@data[self.class.name].except_filters[:after].each do |k,methods| 
